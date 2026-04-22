@@ -4,7 +4,7 @@
 name: C++ Rewrite
 scope: source.c++
 version: 2
-extends: Packages/C-Family-Rewrite/C.sublime-syntax
+extends: Packages/C Family Rewrite (C23 and C++23)/C.sublime-syntax
 
 contexts:
   function:

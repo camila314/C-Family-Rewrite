@@ -5,8 +5,8 @@ name: Objective-C++ Rewrite
 scope: source.objc++
 version: 2
 extends:
-  - Packages/C-Family-Rewrite/ObjC.sublime-syntax
-  - Packages/C-Family-Rewrite/C++.sublime-syntax
+  - Packages/C Family Rewrite (C23 and C++23)/ObjC.sublime-syntax
+  - Packages/C Family Rewrite (C23 and C++23)/C++.sublime-syntax
 
 first_line_match: |-
   (?xi:

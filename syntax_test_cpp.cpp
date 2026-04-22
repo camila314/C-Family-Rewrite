@@ -1,4 +1,4 @@
-// SYNTAX TEST "Packages/C-Family-Rewrite/C++.sublime-syntax"
+// SYNTAX TEST "Packages/C Family Rewrite (C23 and C++23)/C++.sublime-syntax"
 
     // Comment
 //  ^^^^^^^^^^ comment.line.double-slash.c 
