@@ -1,0 +1,910 @@
+%YAML 1.2
+---
+# http://www.sublimetext.com/docs/3/syntax.html
+name: C Improved
+scope: source.c
+version: 2
+
+first_line_match: |-
+  (?xi:
+    ^ \s* // .*? -\*- .*? \bc\b(?![#+]) .*? -\*-  # editorconfig
+  )
+
+contexts:
+  main:
+    - include: function
+    - match: (?=\S)
+      push: statement
+
+  prototype:
+    - include: comment
+    - include: preprocessor
+    - match: ^\s*({{likely_macro}})\s*$
+      captures:
+        1: meta.assumed-macro.c
+
+###[ PREPROCESSOR ]############################################################
+
+  comment:
+    - match: //
+      scope: punctuation.definition.comment.c
+      push: comment.line
+    - match: /\*
+      scope: punctuation.definition.comment.c
+      push: comment.block
+    - match: \*/
+      scope: invalid.illegal.stray-comment-end.c
+  comment.line:
+    - meta_scope: comment.line.double-slash.c
+    - include: preprocessor.line-escape
+    - include: eol-pop
+  comment.block:
+    - meta_scope: comment.block.c
+    - include: preprocessor.line-escape
+    - match: \*/
+      scope: punctuation.definition.comment.c
+      pop: 1
+
+  preprocessor:
+    - include: preprocessor.line-escape
+    - include: comment
+
+    - match: '{{dir_start}}((?:el)?if(?:n?def)?|undef|pragma)\b'
+      scope: keyword.control.import.c
+      push:
+        - meta_scope: meta.preprocessor.c
+        - include: preprocessor.line-escape
+        - include: comment
+        - include: eol-pop
+
+    - match: '{{dir_start}}(?:else|endif)\b'
+      scope: keyword.control.import.c
+
+    - match: '{{dir_start}}(?:include|include_next)\b'
+      scope: keyword.control.import.c
+      push: preprocessor.include
+
+    - match: '{{dir_start}}embed\b'
+      scope: keyword.control.import.c
+      push: preprocessor.embed
+
+    - match: '{{dir_start}}define\b'
+      scope: keyword.control.import.c
+      push: preprocessor.define
+
+    - match: '{{dir_start}}error\b'
+      scope: keyword.control.import.error.c
+      push: preprocessor.diagnostic
+
+    - match: '{{dir_start}}warning\b'
+      scope: keyword.control.import.warning.c
+      push: preprocessor.diagnostic
+
+    - match: '{{dir_start}}(?!\s*{{identifier}})'
+      scope: keyword.control.c
+  preprocessor.line-escape:
+    - match: \\$\n
+      scope: punctuation.separator.continuation.c
+      push:
+        - match: ^
+          pop: 1
+  preprocessor.include:
+    - meta_scope: meta.preprocessor.include.c
+    - match: \"
+      scope: punctuation.definition.string.begin.c
+      push: string.double
+    - match: \<
+      scope: punctuation.definition.string.begin.c
+      push: string.angled
+    - include: comment
+    - include: eol-pop
+  preprocessor.diagnostic:
+    - meta_scope: meta.preprocessor.diagnostic.c
+    - meta_content_scope: string.unquoted.c
+    - include: preprocessor.line-escape
+    - include: eol-pop
+  preprocessor.define:
+    - meta_scope: meta.preprocessor.macro.c
+    - include: eol-pop
+    - match: \s*({{identifier}})(\()
+      captures:
+        1: entity.name.macro.c support.macro.c
+        2: meta.group.c punctuation.section.group.begin.c meta.preprocessor.macro.parameters.c
+      set: preprocessor.define-params
+    - match: '{{identifier}}'
+      scope: entity.name.macro.c support.macro.c
+      embed: preprocessor.define-body
+      escape: (?<!\\)\n
+  preprocessor.define-params:
+    - meta_content_scope: meta.group.c meta.preprocessor.macro.parameters.c
+    - include: preprocessor.line-escape
+    - include: comment
+    - include: eol-pop
+    - match: '{{identifier}}'
+      scope: variable.parameter.c
+    - include: punctuation.comma
+    - include: operator.variadic
+    - match: \)
+      scope: meta.group.c punctuation.section.group.end.c meta.preprocessor.macro.parameters.c
+      embed: preprocessor.define-body
+      escape: (?<!\\)\n
+    - include: else-pop
+  preprocessor.define-body:
+    - match: ''
+      set: main
+      with_prototype:
+        - match: \b__VA_ARGS__\b
+          scope: constant.other.c
+        - match: \b__VA_OPT__\b
+          scope: keyword.operator.word.c
+        - match: \#
+          scope: keyword.operator.c
+        - include: preprocessor.line-escape
+  preprocessor.embed:
+    - match: \"
+      scope: punctuation.definition.string.begin.c
+      push: string.double
+    - match: \<
+      scope: punctuation.definition.string.begin.c
+      push: string.angled
+    - match: \b(?:limit|prefix|suffix|if_empty)\b
+      scope: keyword.other.c
+    - match: \(
+      scope: punctuation.section.group.begin.c
+      push: preprocessor.embed-enclosure
+    - include: eol-pop
+  preprocessor.embed-enclosure:
+    - meta_scope: meta.group.c
+    - match: \)
+      scope: punctuation.section.group.end.c
+      pop: 1
+    - include: number
+    - include: operator
+    - include: punctuation
+    - include: string
+
+###[ TOP LEVEL ]############################################################
+
+  statement:
+    - match: ;
+      scope: punctuation.terminator.c
+      pop: 1
+    - include: expression
+
+  expression:
+    # priority issues with matching ^\s*{{identifier}}
+    - match: ^\s+(?={{identifier}})
+      branch_point: try-function
+      branch: [try-function, else-pop]
+    - include: keyword.control-flow
+    - include: keyword.control
+    - match: (?=^{{identifier}}\s+{{identifier}}\s*\()
+      push:
+        - include: function
+        - include: else-pop
+    - include: number
+    - include: string
+    - include: type
+    - include: keyword
+    - include: constant
+    - include: punctuation
+    - include: operator
+    - include: generic
+    - include: call
+    - include: enclosure
+
+  try-function:
+    - include: keyword.control
+    - include: keyword.control-flow
+    - match: (?={{identifier}}\s+{{identifier}}\s*\()
+      set:
+        - include: function
+        - include: else-pop
+    - match: (?=\S)
+      fail: try-function
+
+  call:
+    - match: \b({{std_funcs}})\s*(\()
+      captures:
+        1: variable.function.c support.function.std.c
+        2: meta.group.c punctuation.section.group.begin.c
+      push: call-body
+    - match: ({{identifier}})\s*(\()
+      captures:
+        1: variable.function.c
+        2: meta.group.c punctuation.section.group.begin.c
+      push: call-body
+    - match: (?={{identifier}}\s*$)
+      branch_point: not-call
+      branch: [call-try-not, call-multi-line]
+  call-try-not:
+    - match: '{{identifier}}'
+      set: call-try-not-paren
+  call-try-not-paren:
+    - match: (?=\()
+      fail: not-call
+    - include: else-pop
+  call-multi-line:
+    - meta_content_scope: meta.function-call.c
+    - match: '\b{{std_funcs}}\b'
+      scope: support.function.std.c
+    - match: '\b{{identifier}}\b'
+      scope: variable.function.c
+    - match: \(
+      scope: meta.group.c punctuation.section.group.begin.c
+      set: call-body
+  call-body:
+    - meta_scope: meta.function-call.c meta.group.c
+    - include: enclosure.parenthesis
+
+  function:
+    - include: expression-identifiers
+    - include: operator.pointer
+    - match: ({{identifier}})\s*(\()
+      captures:
+        1: entity.name.function.c
+        2: meta.function.parameters.c meta.group.c punctuation.section.group.begin.c
+      push:
+        - function-tail
+        - function-params
+    - match: \b{{identifier}}\b
+  function-params:
+    - meta_content_scope: meta.function.parameters.c meta.group.c
+    - match: \)
+      scope: meta.group.c punctuation.section.group.end.c
+      pop: 1
+    - match: \}|\] # Fallback
+      scope: invalid.illegal.stray-bracket-end.c
+      pop: 2
+    - match: ; # Fallback
+      scope: invalid.illegal.unexpected-terminator.c
+      pop: 2
+
+    - match: (?={{identifier}}\s*(?!\s*[\[,\)]|$))
+      push:
+        - match: \b
+          set: function-params-name
+        - include: expression
+    - include: expression
+  function-params-name:
+    - match: (?=[\]\}\);]) # Fallback
+      pop: 1
+    - match: '{{fn_pointer}}'
+      captures:
+        1: keyword.operator.c
+        2: variable.parameter.c
+        3: punctuation.section.group.begin.c
+      set: function-params
+    - include: expression-identifiers
+    - match: ({{identifier}})\s*(\[)
+      captures:
+        1: variable.parameter.c
+        2: meta.brackets.square.c punctuation.section.brackets.begin.c
+      set: enclosure.brackets
+    - match: ({{identifier}})\s*(?=[,\)]|$)
+      captures:
+        1: variable.parameter.c
+      pop: 1
+    - include: expression
+  function-tail:
+    - meta_scope: meta.function.c
+    - match: (?=;)
+      pop: 1
+    - match: \{
+      scope: punctuation.section.block.begin.c meta.block.c
+      set: function-body
+    - include: expression-identifiers
+    - match: \[\[
+      scope: meta.brackets.square.c punctuation.section.brackts.begin.c
+      push: enclosure.attribute
+  function-body:
+    - meta_scope: meta.function.c
+    - include: enclosure.inner-block
+    - include: label
+
+  expression-identifiers:
+    - include: operator.pointer
+    - include: operator.word
+    - include: type
+    - include: keyword
+    - include: constant
+    - include: number
+
+###[ SIMPLE STRUCTURES ]############################################################
+
+  enum-def: # for C++ to override
+    - match: \benum\b
+      scope: keyword.declaration.enum.c
+      branch_point: enum
+      branch: [type.enum, pop-immediately]
+
+  type:
+    - match: \btypedef\b
+      scope: keyword.declaration.type.c
+      push: type.typedef
+    - include: enum-def
+    - match: \bstruct\b
+      scope: keyword.declaration.struct.c
+      branch_point: struct
+      branch: [type.struct, pop-immediately]
+    - match: \bunion\b
+      scope: keyword.declaration.union.c
+      branch_point: union
+      branch: [type.union, pop-immediately]
+
+    - match: '{{fn_pointer}}'
+      captures:
+        1: keyword.operator.c
+        3: punctuation.section.group.begin.c
+      set: function-params
+  type.typedef:
+    - match: '{{fn_pointer}}'
+      captures:
+        1: keyword.operator.c
+        2: entity.name.type.typedef.c
+        3: punctuation.section.group.begin.c
+      set: function-params
+
+    - match: ({{identifier}})\s*(?=;)
+      captures:
+        1: entity.name.type.typedef.c
+      pop: 1
+    - match: (?=\)|;) # Fallback
+      pop: 1
+    - include: expression
+  type.enum:
+    - meta_scope: meta.enum.c
+    - match: ''
+      push:
+        - pop-twice
+        - type.enum-body
+        - type.enum-body-start
+        - likely-macro
+        - type.enum-name
+        - likely-macro
+  type.enum-name:
+    - match: '{{identifier}}\s*(?=;)'
+      scope: entity.name.enum.forward-declare.c
+      pop: 4
+    - match: '{{identifier}}'
+      scope: entity.name.enum.c
+      pop: 1
+    - include: else-pop
+  type.enum-body-start:
+    - match: \{
+      scope: meta.block.c punctuation.section.block.begin.c
+      pop: 1
+    - match: (?=\S)
+      fail: enum
+  type.enum-body:
+    - meta_content_scope: meta.block.c
+    - match: '{{identifier}}'
+      scope: entity.name.constant.c variable.language.c
+      push:
+        - match: (?=,|})
+          pop: 1
+        - include: expression
+    - include: punctuation.comma
+    - match: \}
+      scope: punctuation.section.block.end.c
+      pop: 1
+
+  type.struct:
+    - meta_scope: meta.struct.c
+    - match: ''
+      push:
+        - pop-twice
+        - enclosure.outer-block
+        - type.struct-body
+        - likely-macro
+        - type.struct-name
+        - likely-macro
+  type.struct-name:
+    - match: '{{identifier}}\s*(?=;)'
+      scope: entity.name.struct.forward-declare.c
+      pop: 4
+    - match: '{{identifier}}'
+      scope: entity.name.struct.c
+      pop: 1
+    - include: else-pop
+  type.struct-body:
+    - match: \{
+      scope: meta.block.c punctuation.section.block.begin.c
+      pop: 1
+    - match: (?=\S)
+      fail: struct
+
+  type.union:
+    - meta_scope: meta.union.c
+    - match: ''
+      push:
+        - pop-twice
+        - enclosure.outer-block
+        - type.union-body
+        - likely-macro
+        - type.union-name
+        - likely-macro
+  type.union-name:
+    - match: '{{identifier}}\s*(?=;)'
+      scope: entity.name.union.forward-declare.c
+      pop: 4
+    - match: '{{identifier}}'
+      scope: entity.name.union.c
+      pop: 1
+    - include: else-pop
+  type.union-body:
+    - match: \{
+      scope: meta.block.c punctuation.section.block.begin.c
+      pop: 1
+    - match: (?=\S)
+      fail: union
+
+  enclosure:
+    - match: \(
+      scope: meta.group.c punctuation.section.group.begin.c
+      push: enclosure.parenthesis
+    - match: \[\[
+      scope: meta.brackets.square.c punctuation.section.brackts.begin.c
+      push: enclosure.attribute
+    - match: \[
+      scope: meta.brackets.square.c punctuation.section.brackets.begin.c
+      push: enclosure.brackets
+    - match: \{
+      scope: meta.block.c punctuation.section.block.begin.c
+      push: enclosure.inner-block
+  enclosure.parenthesis:
+    - meta_content_scope: meta.group.c
+    - include: expression
+    - match: \)
+      scope: meta.group.c punctuation.section.group.end.c
+      pop: 1
+    - match: \}|\] # Fallback
+      scope: invalid.illegal.stray-bracket-end.c
+      pop: 1
+  enclosure.brackets:
+    - meta_content_scope: meta.brackets.square.c
+    - include: expression
+    - match: \]
+      scope: meta.brackets.square.c punctuation.section.brackets.end.c
+      pop: 1
+    - match: \)|\} # Fallback
+      scope: invalid.illegal.stray-bracket-end.c
+      pop: 1
+  enclosure.outer-block:
+    - meta_content_scope: meta.block.c
+    - include: function
+    - include: expression
+    - match: \}
+      scope: meta.block.c punctuation.section.block.end.c
+      pop: 1
+    - match: \)|\] # Fallback
+      scope: invalid.illegal.stray-bracket-end.c
+      pop: 1
+  enclosure.inner-block:
+    - meta_content_scope: meta.block.c
+    - include: expression
+    - match: \}
+      scope: meta.block.c punctuation.section.block.end.c
+      pop: 1
+    - match: \)|\] # Fallback
+      scope: invalid.illegal.stray-bracket-end.c
+      pop: 1
+  enclosure.attribute:
+    - meta_scope: meta.brackets.square.c meta.annotation.c
+    - match: \b({{attribute_func}})\s*(\()
+      captures:
+        1: storage.modifier.c
+        2: meta.group.c punctuation.section.group.begin.c
+      push: enclosure.parenthesis
+    - match: \b{{attribute_item}}\b
+      scope: constant.other.c
+    - match: \]\]
+      scope: punctuation.section.brackets.end.c
+      pop: 1
+
+  generic:
+    - match: \b(_Generic)\s*(\()
+      captures:
+        1: keyword.declaration.c
+        2: punctuation.section.group.begin.c
+      push: generic-body
+  generic-body:
+    - match: ':'
+      scope: keyword.operator.c
+      push:
+        - match: ({{identifier}})\s*(?=,|\))
+          captures:
+            1: variable.function.c
+          pop: 1
+    - include: expression
+
+  label:
+    - match: '({{identifier}})\s*(:)'
+      captures:
+        1: entity.name.label.c
+        2: punctuation.separator.c
+
+  case:
+    - match: \bcase\b
+      scope: keyword.control.case.c
+      push: case-body
+  case-body:
+    - match: ':'
+      scope: punctuation.separator.c
+      pop: 1
+    - include: expression
+    - include: eol-pop
+
+  access:
+    - match: '{{identifier}}'
+      scope: variable.other.readwrite.member.c
+      set: access-not-fn
+  access-not-fn:
+    - match: \(
+      fail: access
+    - include: else-pop
+
+  likely-macro:
+    - match: '({{likely_macro}})\s*(\()'
+      captures:
+        1: variable.function.assumed-macro.c
+        2: meta.group.c++ punctuation.section.group.begin.c
+      push: call-body
+    - match: '{{likely_macro}}'
+      scope: meta.assumed-macro.c
+    - include: else-pop
+
+###[ BASIC OBJECTS ]############################################################
+
+  string:
+    - match: (L|u8?|U)?(\")
+      captures:
+        1: storage.type.string.c
+        2: punctuation.definition.string.begin.c
+      push: string.double
+    - match: (L?)(\')
+      captures:
+        1: storage.type.string.c
+        2: punctuation.definition.string.begin.c
+      push: string.single
+  string.double:
+    - meta_scope: string.quoted.double.c
+    - meta_include_prototype: false
+    - include: preprocessor.line-escape
+    - match: \"
+      scope: punctuation.definition.string.end.c
+      pop: 1
+    - include: string-escape
+    - include: string-format
+  string.single:
+    - meta_scope: string.quoted.single.c
+    - meta_include_prototype: false
+    - match: \'
+      scope: punctuation.definition.string.end.c
+      pop: 1
+    - include: string-escape
+  string.angled:
+    - meta_scope: string.quoted.other.c
+    - meta_include_prototype: false
+    - match: \>
+      scope: punctuation.definition.string.end.c
+      pop: 1
+  string-escape:
+    - match: \\(?:[abfnrtv\\'\"?]|[eE]|[0-7]{1,3}|x\h+|u\h{4}|U\h{8})
+      scope: constant.character.escape.c
+    - match: \\.
+      scope: invalid.illegal.unknown-escape.c
+  string-format:
+    - match: |-
+        (?x)%
+          (?:\d+\$)?                                      # field (argument #)
+          [#0\- +']*                                    # flags
+          [,;:_]?                                       # separator character (AltiVec)
+          (?:(?:-?\d+)|\*(?:-?\d+\$)?)?                       # minimum field width
+          (?:\.(?:(?:-?\d+)|\*(?:-?\d+\$)?)?)?                  # precision
+          (?:hh|h|ll|l|j|t|z|q|L|vh|vl|v|hv|hl)?          # length modifier
+          (?:\[[^\]]+\]|[am]s|[diouxXDOUeEfFgGaACcSspn%]) # conversion type
+      scope: constant.other.placeholder.c
+
+  operator:
+    - include: operator.variadic
+    - include: operator.increment-decrement
+    - include: operator.accessor
+    - include: operator.assignment
+    - include: operator.arithmetic
+    - include: operator.logical
+    - include: operator.bitwise
+    - include: operator.comparison
+    - include: operator.word
+    - include: operator.ternary
+  operator.assignment:
+    - match: =
+      scope: keyword.operator.assignment.c
+    - match: \+=|-=|\*=|/=|%=|&=|\|=|\^=|<<=|>>=|>>=
+      scope: keyword.operator.assignment.augmented.c
+  operator.arithmetic:
+    - match: \+|-|\*|/|%|!
+      scope: keyword.operator.arithmetic.c
+  operator.logical:
+    - match: \&\&|\|\|
+      scope: keyword.operator.logical.c
+  operator.bitwise:
+    - match: \&|\||\^|~|<<|>>
+      scope: keyword.operator.bitwise.c
+  operator.comparison:
+    - match: ==|!=|<=|>=|<|>
+      scope: keyword.operator.comparison.c
+  operator.word:
+    - match: \b(?:sizeof|_Alignof|alignof|offsetof|_Static_assert|static_assert|_Pragma)\b
+      scope: keyword.operator.word.c
+  operator.ternary:
+    - match: '\?|\:'
+      scope: keyword.operator.ternary.c
+  operator.variadic:
+    - match: \.\.\.
+      scope: keyword.operator.variadic.c
+  operator.increment-decrement:
+    - match: \+\+|--
+      scope: keyword.operator.arithmetic.c
+  operator.accessor:
+    - match: \.\.
+      scope: invalid.illegal.syntax.c
+    - match: (?:(\.)|(\-\>))(?=\s*{{identifier}})
+      captures:
+        1: punctuation.accessor.dot.c
+        2: punctuation.accessor.arrow.c
+      branch_point: access
+      branch: [access, pop-immediately]
+    - match: \.|\-\>
+      scope: punctuation.accessor.c
+  operator.pointer:
+    - match: \&|\*
+      scope: keyword.operator.c
+
+  punctuation:
+    - include: punctuation.comma
+    - include: punctuation.semicolon
+  punctuation.comma:
+    - match: ','
+      scope: punctuation.separator.c
+  punctuation.semicolon:
+    - match: ;
+      scope: punctuation.terminator.c
+
+  number:
+    # decimal floats
+    - match: |-
+        (?x:
+          \b(\d[\d']*)
+          (?:
+            ( (\.)
+              (?:
+                # 1.1, 1.1e1, 1.1e-1, 1.1f, 1.1e1f, 1.1e-1f, 1.1L, 1.1e1L, 1.1e-1L
+                \d[\d']* {{dec_exponent}}?
+                # 1.e1, 1.e-1, 1.e1f, 1.e-1f, 1.e1L, 1.e-1L
+                | {{dec_exponent}}
+                # 1., 1.f, 1.L # but not `..`
+                | (?!\.)
+              )
+              # 1e1 1e1f 1e1L
+              | {{dec_exponent}}
+            ) ({{double_suffix}})?
+            # 1f
+            | ({{float_suffix}})
+          ) ({{dec_suffix}})?
+          # .1, .1e1, .1e-1, .1f, .1e1f, .1e-1f, .1L, .1e1L, .1e-1L
+          | ( (\.) \d[\d']* {{dec_exponent}}? ) (?: ({{double_suffix}}) | ({{dec_suffix}}) )?
+        )
+      scope: meta.number.float.decimal.c
+      captures:
+        1: constant.numeric.value.c
+        2: constant.numeric.value.c
+        3: punctuation.separator.decimal.c
+        4: constant.numeric.suffix.c
+        5: constant.numeric.suffix.c
+        6: invalid.illegal.numeric.suffix.c
+        7: constant.numeric.value.c
+        8: punctuation.separator.decimal.c
+        9: constant.numeric.suffix.c
+        10: invalid.illegal.numeric.suffix.c
+    # hexadecimal float
+    - match: \b(0[xX])(\h*(\.)\h*{{hex_exponent}})(?:([fFlL]\b)|({{dec_suffix}}))?
+      scope: meta.number.float.hexadecimal.c
+      captures:
+        1: constant.numeric.base.c
+        2: constant.numeric.value.c
+        3: punctuation.separator.decimal.c
+        4: constant.numeric.suffix.c
+        5: invalid.illegal.numeric.suffix.c
+    # binary integer (C23)
+    - match: \b(0[bB])(['01]*)?(?:({{integer_suffix}})|({{bin_suffix}}))?
+      scope: meta.number.integer.binary.c
+      captures:
+        1: constant.numeric.base.c
+        2: constant.numeric.value.c
+        3: constant.numeric.suffix.c
+        4: invalid.illegal.numeric.suffix.c
+    # hexadecimal integer
+    - match: \b(0[xX])(['\h]*)?(?:({{integer_suffix}})|({{hex_suffix}}))?
+      scope: meta.number.integer.hexadecimal.c
+      captures:
+        1: constant.numeric.base.c
+        2: constant.numeric.value.c
+        3: constant.numeric.suffix.c
+        4: invalid.illegal.numeric.suffix.c
+    # octal integer
+    - match: \b(0)([0-7][0-7']*)(?:({{integer_suffix}})|({{oct_suffix}}))?
+      scope: meta.number.integer.octal.c
+      captures:
+        1: constant.numeric.base.c
+        2: constant.numeric.value.c
+        3: constant.numeric.suffix.c
+        4: invalid.illegal.numeric.suffix.c
+    # decimal integer
+    - match: \b(\d[\d']*)(?:({{integer_suffix}})|({{dec_suffix}}))?
+      scope: meta.number.integer.decimal.c
+      captures:
+        1: constant.numeric.value.c
+        2: constant.numeric.suffix.c
+        3: invalid.illegal.numeric.suffix.c
+
+  constant:
+    - match: \b(?:true|TRUE)\b
+      scope: constant.language.boolean.true.c
+    - match: \b(?:false|FALSE)\b
+      scope: constant.language.boolean.false.c
+    - match: \b(?:NULL|nullptr)\b
+      scope: constant.language.null.c
+    - match: \b__func__\b
+      scope: constant.language.c
+    - match: \b__(?:cplusplus|[a-zA-Z_]*[a-zA-Z]__)\b
+      scope: support.constant.c
+    - match: '\bk[A-Z]\w*\b'
+      scope: constant.other.variable.mac-classic.c
+    - include: constant.malformed
+  constant.malformed:
+    - match: \b(?i:true|false|null|nullptr|__cplusplus)\b
+      scope: invalid.illegal.malformed-constant-language.c
+
+  keyword:
+    - include: keyword.control-flow
+    - include: keyword.control
+    - include: keyword.storage
+    - include: keyword.declaration
+    - include: keyword.asm
+    - include: keyword.type
+  keyword.storage:
+    - match: \bauto\b
+      scope: storage.type.c
+    - match: \b(?:const|volatile|restrict|_Atomic|register|static|inline|extern|register|thread_local|_Thread_local|_Noreturn|noreturn|_Alignas)\b
+      scope: storage.modifier.c
+
+    - match: \b(__declspec)(\()
+      captures:
+        1: storage.modifier.c
+        2: meta.group.c punctuation.section.group.begin.c
+      push: declspec
+    - match: \b__declspec\b
+      scope: storage.modifier.c
+
+    - match: \b(__attribute__)\s*(\(\()
+      captures:
+        1: storage.modifier.c
+        2: punctuation.section.group.begin.c
+      push: gnu-attribute
+  keyword.declaration:
+    - match: \b(?:struct|enum|union)\b
+      scope: keyword.declaration.c
+    - match: \btypedef\b
+      scope: keyword.declaration.type.c
+  keyword.control-flow:
+    - match: \bcontinue\b
+      scope: keyword.control.flow.continue.c
+    - match: \bbreak\b
+      scope: keyword.control.flow.break.c
+    - match: \breturn\b
+      scope: keyword.control.flow.return.c
+    - match: \bgoto\b
+      scope: keyword.control.flow.goto.c
+  keyword.control:
+    - include: case
+    - match: \b(default)\s*(:)
+      captures:
+        1: keyword.control.case.c
+        2: punctuation.separator.c
+    - match: \b(?:if|else|for|while|do|switch|default)\b
+      scope: keyword.control.c
+  keyword.asm:
+    - match: \b(?:asm|__asm|__asm__)\b
+      scope: keyword.control.import.c
+  keyword.type:
+    - match: \b(?:bool|void|char|short|int|long|float|double|signed|unsigned|_Complex|_Imaginary|_Bool)\b
+      scope: storage.type.c
+    - match: \b(?:u?intptr|u?intmax|ptrdiff|nullptr|max_align|size|u?int(?:_fast|_least)?(?:8|16|32|64))_t\b
+      scope: support.type.stdint.c
+    - match: \b(typeof_unqual|__typeof__|__typeof|typeof)\s*(\()
+      captures:
+        1: keyword.declaration.type.c
+        2: meta.group.c punctuation.section.group.begin.c
+      push: enclosure.parenthesis
+    - match: \b(?:typeof_unqual|__typeof__|__typeof|typeof)\b
+      scope: keyword.declaration.type.c
+
+  declspec:
+    - meta_content_scope: meta.group.c
+    - match: \b{{declspec_item}}\b
+      scope: constant.other.c
+    - match: \b({{declspec_func}})\s*(\()
+      captures:
+        1: storage.modifier.c
+        2: meta.group.c punctuation.section.group.begin.c
+      push: enclosure.parenthesis
+    - match: \b(property)\s*(\()
+      captures:
+        1: storage.modifier.c
+        2: punctuation.section.group.begin.c
+      push: declspec-proprty
+    - include: expression
+    - match: \)
+      scope: meta.group.c punctuation.section.group.end.c
+      pop: 1
+  declspec-proprty:
+    - meta_content_scope: meta.group.c
+    - match: \b(?:get|put)\b
+      scope: variable.parameter.c
+    - include: enclosure.parenthesis
+
+  gnu-attribute:
+    - meta_scope: meta.group.c meta.attribute.c
+    - include: punctuation.comma
+    - match: \b({{gnu_attribute_func}})\s*(\()
+      captures:
+        1: storage.modifier.c
+        2: meta.group.c punctuation.section.group.begin.c
+      push: enclosure.parenthesis
+    - match: \b{{gnu_attribute_item}}\b
+      scope: constant.other.c
+    - match: \)\)
+      scope: punctuation.section.group.end.c
+      pop: 1
+
+###[ HELPERS ]############################################################
+
+  pop-immediately:
+    - match: ""
+      pop: 1
+  else-pop:
+    - match: (?=\S)
+      pop: 1
+  eol-pop:
+    - match: $\n?
+      pop: 1
+  pop-twice:
+    - match: ""
+      pop: 2
+
+variables:
+  identifier: \b[[:alpha:]_][[:alnum:]_]*\b
+  likely_macro: \b[[:upper:]][[:upper:][:digit:]_]+\b
+  fn_pointer: \(\s*(\*)({{identifier}})\s*\)\s*(\()
+
+  bin_suffix: '[2-9a-zA-Z_][[:alnum:]_]*'
+  oct_suffix: '[8-9g-zG-Z_][[:alnum:]_]*'
+  dec_suffix: '[a-zA-Z_][[:alnum:]_]*'
+  hex_suffix: '[g-zG-Z_][[:alnum:]_]*'
+  double_suffix: '[fFlL]'
+  float_suffix: '[fF]'
+  integer_suffix: '(?:(?:ll|LL)(?!\s*[lL])|(?i)(?:u(?!\w*u)|l(?!\w*l)|i(?!\w*[ij])|j(?!\w*[ij])))+\b'
+  dec_exponent: (?:[eE][-+]?[\d']*)
+  hex_exponent: (?:[pP][-+]?[\d']*)
+
+  declspec_item: '(?:allocator|appdomain|deprecated|dllimport|dllexport|empty_bases|hybrid_patchable|jitintrinsic|naked|noalias|noinline|noreturn|nothrow|novtable|no_sanitize_address|process|restrict|safebuffers|selectany|thread)'
+  declspec_func: '(?:align|allocate|code_seg|spectre|uuid|deprecated)'
+  gnu_attribute_item: '(?:noreturn|pure|const|malloc|cold|hot|deprecated|always_inline|noinline|packed|unused|used|leaf|artificial|flatten|noclone|returns_twice|weak|no_reorder|minsize|externally_visible|constructor|destructor)'
+  gnu_attribute_func: '(?:aligned|format|nonnull|section|visibility|alias|ifunc|target|alloc_size|cleanup|warning|error|cold_hot_partitioning|no_sanitize|optimize)'
+  attribute_item: '(?:(?:gnu|clang)::{{gnu_attribute_item}}|deprecated|fallthrough|nodiscard|maybe_unused|noreturn|unsequenced|reproducible)'
+  attribute_func: '(?:(?:gnu|clang)::{{gnu_attribute_func}}|deprecated|nodiscard)'
+
+  std_funcs: '(?:assert|(?:exp(?:2|m1)|log(?:10|2|1p)|cbrt|hypot|erfc?|[lt]gamma|ceil|floor|trunc|l{0,2}round|f(?:absmod|max|min|dim)|c(?:abs|real|imag|arg|onj|proj|)|c?(?:exp|log|pow|sqrt|a?(?:sin|cos|tan)h?))[fl]?|abs|l{0,2}div|is(?:finite|inf|nan|normal|greater(?:equal)?|less(?:equal|greater)?|unordered|alnum|alpha|lower|upper|x?digit|cntrl|graph|space|blank|print|punct)(?:set|long)jmp|jmp_buf|signal|raise|va_(?:list|start|arg|copy|end)|std(?:in|out|err)|setv?buf|re(?:wind|move|name)|tmp(?:nam|file)(?:_s)?|f(?:(?:re)?open(?:_s)?|close|flush|wide|read|write|tell|getpos|seek|setpos|error)|gets_s|f?(?:get|put)?(?:c|s|char)|v?f?s?w?scanf(?:s|sn)?w?printf(?:_s)?|abort|(?:(?:at_)?quick_|at)?exit|_Exit|unreachable|system|getenv(?:_s)?|to(?:lower|upper)|ato(?:f|i|l|ll)|str(?:to(?:u?ll?|f|l?d)|from[dfl]|(?:n?cpy|cat|nlen|tok|error(?:len)?)(?:_s)?|xfrm|n?dup|n?cmp|coll|r?chr|c?spn|pbrk|str|len)|mem(?:chr|cmp|set(?:_explicit|_s)?|(?:move|cpy)(?:_s)?|ccpy)|thrd_(?:create|equal|current|sleep|yield|exit|detach|join|success|timedout|busy|nomem|error)|(?:diff|mk|strf)?time|clock|timespec_get(?:res)?|(?:as)?ctime(?:_s)?|(?:gm|local)time(?:_[rs])?)'
+
+  dir_start: ^\s*#\s*

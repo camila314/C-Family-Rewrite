@@ -1,0 +1,32 @@
+%YAML 1.2
+---
+# http://www.sublimetext.com/docs/3/syntax.html
+name: Objective-C++ Improved
+scope: source.objc++
+version: 2
+extends:
+  - Packages/C-Family-Improved/ObjC.sublime-syntax
+  - Packages/C-Family-Improved/C++.sublime-syntax
+
+first_line_match: |-
+  (?xi:
+    ^ \s* // .*? -\*- .*? \bobj(ective-)?(c\+\+|cpp\b) .*? -\*-  # editorconfig
+  )
+
+
+contexts:
+  protocol-list:
+    - include: template
+  message-enclosure: []
+  enclosure:
+    - meta_prepend: true
+    - match: (?=\[(?!\s*{{identifier}}\s*[:\]]))
+      branch_point: message
+      branch: [pre-message, pre-lambda]
+
+  pre-lambda:
+    - match: \[\[
+      scope: meta.brackts.square.objc++ punctuation.section.brackets.begin.objc++
+      set: enclosure.attribute
+    - include: lambda-enclosure
+    - include: pop-immediately

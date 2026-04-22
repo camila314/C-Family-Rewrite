@@ -1,0 +1,647 @@
+%YAML 1.2
+---
+# http://www.sublimetext.com/docs/3/syntax.html
+name: C++ Improved
+scope: source.c++
+version: 2
+extends: Packages/C-Family-Improved/C.sublime-syntax
+
+contexts:
+  function:
+    - match: \b(operator)\s*({{operator_overload}})\s*(\()
+      captures:
+        1: keyword.operator.c++
+        2: entity.name.function.c++
+        3: meta.group.c++ punctuation.section.group.begin.c++
+      push:
+        - function-tail
+        - function-params
+
+    - include: expression-identifiers
+    - include: operator.pointer
+    - match: (~?{{identifier}})\s*(\()
+      captures:
+        1: entity.name.function.c++
+        2: meta.group.c++ punctuation.section.group.begin.c++
+      push:
+        - function-tail
+        - function-params
+    - match: (?={{identifier}}\s*<)
+      branch_point: function-template
+      branch: [function-template, consume-ident]
+    - match: '{{identifier}}'
+  function-template:
+    - match: '{{identifier}}(?=\s*<)'
+      scope: entity.name.function.c++
+      set: function-template-body
+  function-template-body:
+        - include: template
+        - match: \(
+          scope: meta.group.c++ punctuation.section.group.begin.c++
+          push:
+            - pop-twice
+            - function-tail
+            - function-params
+        - match: (?=\S)
+          fail: function-template
+
+  function-params: # Add default parameters
+    - meta_content_scope: meta.function.parameters.c meta.group.c++
+    - match: \)
+      scope: punctuation.section.group.end.c++
+      pop: 1
+    - match: \}|\] # Fallback
+      scope: invalid.illegal.stray-bracket-end.c++
+      pop: 2
+    - match: ; # Fallback
+      scope: invalid.illegal.unexpected-terminator.c++
+      pop: 2
+
+    - match: (?={{identifier}}\s*(?!\s*[\[,\)=]|$))
+      push:
+        - match: \b
+          set: function-params-name
+        - include: expression
+    - include: expression
+  function-params-name:
+    - match: (?=[\]\}\);]) # Fallback
+      pop: 1
+    - include: expression-identifiers
+    - match: ({{identifier}})\s*(\[)
+      captures:
+        1: variable.parameter.c++
+        2: meta.brackets.square.c++ punctuation.section.brackets.begin.c++
+      set: enclosure.brackets
+    - match: ({{identifier}})\s*(?=[,\)=]|$)
+      captures:
+        1: variable.parameter.c++
+      pop: 1
+    - include: expression
+
+  function-tail:
+    - meta_prepend: true
+    - match: \b(?:override|final|noexcept)\b
+      scope: storage.modifier.c++
+    - match: ':'
+      scope: punctuation.separator.initializer-list.begin.c++
+      push: initializer-list
+    - match: \brequires\b
+      scope: storage.modifier.c++
+      push: function-tail-requires
+    - match: \-\>
+      scope: keyword.operator.arrow.c++
+      push: function-tail-return
+    - include: operator
+  function-tail-return:
+    - meta_scope: meta.function.return-type.c++
+    - match: (?=\brequires\b)
+      pop: 1
+    - include: expression-identifiers
+    - match: (?=(?:{{identifier}})?\s*{)
+      pop: 1
+    - include: expression
+  function-tail-requires:
+    - meta_scope: meta.function.requires.c++
+    - match: (?={)
+      pop: 1
+    - include: expression
+
+  initializer-list:
+    - meta_scope: meta.method.initializer-list.c++
+    - match: '{{identifier}}'
+      scope: variable.other.readwrite.member.c++
+      push: initializer-list-body
+    - include: punctuation.comma
+    - include: else-pop
+  initializer-list-body:
+    - include: template
+    - match: \(
+      scope: meta.group.c++ punctuation.section.group.begin.c++
+      set: enclosure.parenthesis
+    - match: \{
+      scope: meta.block.c++ punctuation.section.block.begin.c++
+      set: enclosure.inner-block
+    - include: else-pop
+
+  call:
+    - meta_prepend: true
+    - match: \b(?={{identifier}}\s*<)
+      branch_point: template-call
+      branch: [template-call, eat-template]
+    - match: (~{{identifier}})\s*(\()
+      captures:
+        1: variable.function.c++
+        2: punctuation.section.group.begin.c++
+      push: enclosure.parenthesis
+    - match: (operator)\s*({{operator_overload}})\s*(\()
+      captures:
+        1: keyword.operator.c++
+        2: variable.function.c++
+        3: punctuation.section.group.begin.c++
+      push: enclosure.parenthesis
+  template-call:
+    - match: '{{identifier}}'
+      scope: entity.name.function.c++
+      set: template-call-body
+  template-call-body:
+    - include: template
+    - match: \(
+      scope: meta.group.c++ punctuation.section.group.begin.c++
+      set: enclosure.parenthesis
+    - match: (?=\S)
+      fail: template-call
+  call-try-not-paren:
+    - meta_prepend: true
+    - include: template
+  call-multi-line:
+    - meta_prepend: true
+    - include: template
+  eat-template:
+    - match: '{{identifier}}'
+    - match: (?=<)
+      set:
+        - include: template
+        - include: else-pop
+
+  expression-identifiers:
+    - meta_append: true
+    - include: punctuation.qualifier
+    - include: template
+    - include: module
+  expression:
+    - meta_prepend: true
+    - include: template
+    - include: module
+    - include: type
+    - match: \+\s*(\[)
+      captures:
+        1: meta.brackets.square.c++ punctuation.section.brackets.begin.c++
+      push: lambda
+
+  module:
+    - match: \bmodule\b
+      scope: keyword.declaration.module.c++
+      push: module-name
+    - match: \b(import)\s*(?=<)
+      captures:
+        1: keyword.other.import.c++
+      push: string.angled
+    - match: \bimport\b
+      scope: keyword.other.import.c++
+      push: module-name
+  module-name:
+    - meta_content_scope: entity.name.module.c++
+    - match: '{{identifier}}'
+    - match: \.(?=\W)
+      scope: invalid.illegal.unexpected-character.c++
+    - match: \.
+      scope: punctuation.accessor.dot.c++
+    - match: ':'
+      scope: punctuation.separator.partition.c++
+    - include: else-pop
+
+  type:
+    - meta_prepend: true
+    - match: \bnamespace\b
+      scope: keyword.declaration.namesace.c++
+      branch_point: namespace
+      branch: [type.namespace, pop-immediately]
+    - match: \b(using)\s+(namespace|enum)\b
+      captures:
+        1: keyword.declaration.c++
+        2: keyword.declaration.c++
+      push: type.using-namespace
+    - match: \busing\b
+      scope: keyword.declaration.c++
+      push: type.using
+    - match: \b(?:struct|class)\b
+      scope: keyword.declaration.c++
+      push: class
+    - match: \btemplate\b
+      scope: keyword.declaration.c++
+      push: type.template
+    - match: \bconcept\b
+      scope: keyword.declaration.c++
+      push: type.concept
+  type.namespace:
+    - meta_scope: meta.namespace.c++
+    - match: (?={{qualified}})
+      push:
+        - meta_scope: entity.name.namespace.c++
+        - include: qualified-ident
+        - include: else-pop
+    - match: \{
+      scope: meta.block.c++ punctuation.section.block.begin.c++
+      push:
+        - pop-twice
+        - enclosure.outer-block
+    - match: =
+      scope: keyword.operator.assignment.c++
+      pop: 1
+    - match: (?=\S)
+      fail: namespace
+  type.using:
+    - meta_scope: meta.using.c++
+    - meta_content_scope: entity.name.using.c++
+    - match: (?={{qualified}})
+      push: qualified-ident
+    - include: else-pop
+  type.using-namespace:
+    - meta_scope: meta.using.c++
+    - meta_content_scope: entity.name.namespace.c++
+    - match: (?={{qualified}})
+      push:
+        - pop-twice
+        - qualified-ident
+    - include: eol-pop
+
+  type.template:
+    - meta_scope: meta.template.c++
+    - match: \<
+      scope: punctuation.definition.generic.begin.c++
+      push:
+        - type.template-requires
+        - type.template-body
+    - include: else-pop
+  type.template-body:
+    - match: \>
+      scope: punctuation.section.generic.end.c++
+      pop: 1
+    - match: \}|\]|\) # Fallback
+      scope: invalid.illegal.stray-bracket-end.c++
+      pop: 2
+    - match: ; # Fallback
+      scope: invalid.illegal.unexpected-terminator.c++
+      pop: 2
+    - match: (?={{identifier}}\s*(?!\s*[,\>=]|$))
+      push:
+        - match: \b
+          set: type.template-name
+        - include: expression
+    - match: \b(?:typename|class)\b
+      scope: keyword.declaration.type.c++
+    - include: expression
+  type.template-requires:
+    - match: \brequires\b
+      scope: storage.modifier.c++
+      pop: 1
+    - include: else-pop
+  type.template-name:
+    - match: (?=[\]\}\);]) # Fallback
+      pop: 1
+    - match: \b(?:typename|class)\b
+      scope: keyword.declaration.type.c++
+    - include: expression-identifiers
+    - match: ({{identifier}})\s*(\[)
+      captures:
+        1: variable.parameter.type.c++
+        2: meta.brackets.square.c++ punctuation.section.brackets.begin.c++
+      set: enclosure.brackets
+    - match: ({{identifier}})\s*(?=[,\>=]|$)
+      captures:
+        1: variable.parameter.type.c++
+      pop: 1
+    - include: expression
+
+  type.concept:
+    - meta_scope: meta.concept.c++
+    - match: '{{identifier}}'
+      scope: entity.name.concept.c++
+      push: type.concept-body
+    - include: else-pop
+  type.concept-body:
+    - match: (?=;|\)|\]|\})
+      pop: 1
+    - include: expression
+
+  enum-def:
+    - match: \b(enum)(?:\s*(class))?\b
+      captures:
+        1: keyword.declaration.enum.c++
+        2: keyword.declaration.class.c++
+      branch_point: enum
+      branch: [type.enum, pop-immediately]
+
+  enclosure:
+    - meta_prepend: true
+    - include: lambda-enclosure
+  enclosure.brackets:
+    - meta_prepend: true
+    - match: (\])\s*(<)
+      captures:
+        1: punctuation.section.brackets.end.c++
+        2: keyword.control.comparison.c++
+      set: lambda-try-not-template
+    - match: (\])\s*(\()
+      captures:
+        1: punctuation.section.brackets.end.c++
+        2: meta.group.c++ punctuation.section.group.begin.c++
+      set: [lambda-try-not, enclosure.parenthesis]
+
+    - match: \]\s*(?:\{|\-\>|mutable\b)
+      fail: lambda
+  enclosure.outer-block:
+    - meta_content_scope: meta.block.c++
+    - match: \}
+      scope: meta.block.c++ punctuation.section.block.end.c++
+      pop: 1
+    - match: '({{likely_macro}})\s*(\()'
+      captures:
+        1: variable.function.assumed-macro.c++
+        2: meta.group.c++ punctuation.section.group.begin.c++
+      push: call-body
+    - match: '{{likely_macro}}'
+      scope: meta.assumed-macro.c++
+    - include: main
+
+  lambda-enclosure: # for ObjC++
+    - match: \[(?!\[)
+      branch_point: lambda
+      scope: meta.brackets.square.c++ punctuation.section.brackets.begin.c++
+      branch: [enclosure.brackets, lambda]
+
+  lambda-try-not:
+    - include: expression-identifiers
+    - match: \-\>
+      fail: lambda
+    - match: \{
+      fail: lambda
+    - include: else-pop
+  lambda-try-not-template:
+    - match: (?=\)|\}|\]|\|\||;|\band\b|\bor\b)
+      pop: 1
+    - match: (?=\&\&\s*[^>,])
+      pop: 1
+    - match: '>'
+      fail: lambda
+    - include: expression
+  lambda:
+    - meta_scope: meta.lambda.c++
+    - match: '[&=](?=\s*[,\]])'
+      scope: storage.modifier.capture.c++
+    - match: (?=\S)
+      push:
+        - pop-twice
+        - function-tail
+        - function-params
+        - lambda-template
+        - lambda-captures
+  lambda-captures:
+    - match: '{{identifier}}'
+      scope: entity.other.lambda-capture.c++ variable.parameter.c++
+    - match: \]
+      scope: punctuation.section.brackets.end.c++
+      pop: 1
+    - match: (?=\=)
+      push:
+        - match: (?=[,\]])
+          pop: 1
+        - include: expression
+    - include: expression
+  lambda-template:
+    - match: (?=\<)
+      push: type.template
+    - match: \(
+      scope: meta.group.c++ punctuation.section.group.begin.c++
+      pop: 1
+    - match: (?=->)
+      pop: 2 # skip params
+    - include: expression-identifiers
+    - match: (?=\{)
+      pop: 2 # skip params
+
+  generic: # override, replace with {} constructor
+    - match: ({{identifier}})\s*(\{)
+      captures:
+        1: variable.function.c++
+        2: meta.block.c punctuation.section.block.begin.c++
+      push: enclosure.inner-block
+
+  class:
+    - match: ({{identifier}})(?=\s*;)
+      scope: entity.name.class.forward-declare.c++
+      pop: 1
+    - match: (?={{identifier}}|:|\{)
+      set:
+        - class-body-start
+        - class-inherit
+        - class-final
+        - likely-macro
+        - class-name
+        - likely-macro
+  class-name:
+    - include: punctuation.qualifier
+    - match: (?={{identifier}})
+      branch_point: class-name
+      branch: [class-name-body, consume-ident]
+    - include: else-pop
+  class-name-body:
+    - match: ({{identifier}})
+      scope: entity.name.class.c++
+      set:
+        - include: template
+        - match: '::'
+          fail: class-name
+        - match: (?=\S)
+          pop: 2
+    - match: (::)
+      fail: class-name
+    - include: else-pop
+  class-final:
+    - match: \bfinal(?!\s*;)\b
+      scope: storage.modifier.c++
+    - include: else-pop
+  class-inherit:
+    - match: ':'
+      scope: punctuation.separator.inheritance.c++
+      push: class-inherit.body
+    - include: else-pop
+  class-inherit.body:
+    - include: keyword.storage
+    - include: punctuation.comma
+    - match: (?={{qualified}})
+      push:
+        - meta_scope: entity.other.inherited-class.c++
+        - include: qualified-ident
+    - include: else-pop
+  class-body-start:
+    - meta_scope: meta.class.c++
+    - match: \{
+      scope: meta.block.c++ punctuation.section.block.begin.c++
+      set: class-body
+    - include: else-pop
+  class-body:
+    - meta_scope: meta.block.c++ meta.class.c++
+    - include: enclosure.outer-block
+
+  qualified-ident:
+    - match: \btypename\b
+      scope: storage.modifier.c++
+    - match: '::'
+      scope: punctuation.accessor.double-colon.c++
+    - match: '{{identifier}}'
+      push: qualified-ident-body
+    - include: else-pop
+  qualified-ident-body:
+    - match: '::'
+      scope: punctuation.accessor.double-colon.c++
+      pop: 1
+    - include: template
+    - match: (?=\S)
+      pop: 2
+
+  template:
+    - match: (?=<([^<=]|$))
+      branch_point: template
+      branch: [try-template, template.fail]
+  try-template:
+    - meta_scope: meta.template.c++
+    - match: <
+      scope: punctuation.definition.generic.begin.c++
+      set: try-template-body
+  try-template-body:
+    - match: (?=\)|\}|\]|\|\||;|\band\b|\bor\b)
+      fail: template
+    - match: (?=\&\&\s*[^>,])
+      fail: template
+    - match: '>'
+      scope: punctuation.definition.generic.end.c++
+      pop: true
+    - include: expression
+  template.fail:
+    - match: <
+      scope: keyword.operator.comparison.c++
+    - include: pop-immediately
+
+  label:
+    - match: '({{identifier}})\s*(:)(?!:)'
+      captures:
+        1: entity.name.label.c++
+        2: punctuation.separator.c++
+
+  access-not-fn:
+    - meta_prepend: true
+    - match: \<
+      fail: access
+
+  keyword:
+    - meta_append: true
+    - match: \b(?:export|friend|operator)\b
+      scope: keyword.other.c++
+  keyword.type:
+    - meta_prepend: true
+    - match: \b(?:w?char(?:8|16|32)_t)|wchar_t\b
+      scope: storage.type.c++
+    - match: \b(decltype)\s*(\()
+      captures:
+        1: keyword.declaration.type.c++
+        2: meta.group.c++ punctuation.section.group.begin.c++
+      push: enclosure.parenthesis
+    - match: \bdecltype\b
+      scope: keyword.declaration.type.c++
+  keyword.storage:
+    - meta_prepend: true
+    - match: '\b(?:private|protected|public)\s*:'
+      scope: storage.modifier.c++
+    - match: \b(?:const(?:expr|eval|init)|explicit|mutable|private|protected|public|virtual|typename|alignas)\b
+      scope: storage.modifier.c++
+  keyword.control:
+    - meta_prepend: true
+    - match: '\b(catch)\s*(\()'
+      captures:
+        1: keyword.control.exception.c++
+        2: meta.group.c++ punctuation.section.group.begin.c++
+      push: function-params
+    - match: \b(?:try|catch|finally|throw)\b
+      scope: keyword.control.exception.c++
+    - match: \bco_(?:await|yield|return)\b
+      scope: keyword.control.c++
+    - match: \b(requires)\s*(\()
+      captures:
+        1: keyword.operator.word.c++
+        2: meta.group.c++ punctuation.section.group.begin.c++
+      push: [function-tail, function-params]
+    - match: \brequires\b
+      scope: keyword.operator.word.c++
+
+  constant:
+    - meta_prepend: true
+    - match: \bthis\b
+      scope: variable.language.c++
+    - match: \bm_[[:alpha:]_$][[:alnum:]_$]*\b
+      scope: variable.other.readwrite.member.c++
+
+  punctuation:
+    - meta_prepend: true
+    - include: punctuation.qualifier
+  punctuation.qualifier:
+    - match: (::)
+      scope: punctuation.accessor.double-colon.c++
+
+  keyword.operator: # needs precedence over the < comparison
+    - meta_prepend: true
+    - include: template
+  operator.bitwise:
+    - match: \&|\||\^|~(?!{{identifier}}\s*\()|<<|>>
+      scope: keyword.operator.bitwise.c++
+  operator.word:
+    - meta_prepend: true
+    - match: \b(?:(?:const|static|reinterpret|dynamic)_cast|static_assert|delete|new|typeid|noexcept)\b
+      scope: keyword.operator.word.c++
+    - match: \b(?:and|xor|or|not)(?:_eq)?\b
+      scope: keyword.operator.logical.c++
+    - match: \b(?:bit(?:and|or)|compl)\b
+      scope: keyword.operator.bitwise.c++
+  operator.comparison:
+    - meta_prepend: true
+    - match: <=>
+      scope: keyword.operator.comparison.c++
+
+  string:
+    - meta_prepend: true
+    - match: (R)(\")([^\s]*)(\()
+      captures:
+        1: storage.type.string.c++
+        2: punctuation.definition.string.begin.c++
+        3: constant.other.placeholder.c++
+        4: constant.other.placeholder.c++
+      push: string.raw
+  string.double:
+    - meta_prepend: true
+    - match: (\")({{literal_operator}})?
+      captures:
+        1: punctuation.definition.string.end.c++
+        2: variable.function.c++
+      pop: 1
+  string.single:
+    - meta_prepend: true
+    - match: (\')({{literal_operator}})?
+      captures:
+        1: punctuation.definition.string.end.c++
+        2: variable.function.c++
+      pop: 1
+  string.raw:
+    - meta_scope: string.quoted.double.raw.c++
+    - match: (\)\3)(\")({{literal_operator}})?
+      captures:
+        1: constant.other.placeholder.c++
+        2: punctuation.definition.string.end.c++
+        3: variable.function.c++
+      pop: true
+  string-format:
+    - meta_prepend: true
+    - match: '{}'
+      scope: constant.other.placeholder.c++
+
+  consume-ident:
+    - match: \b{{identifier}}\b
+    - include: pop-immediately
+variables:
+  operator_overload: '(?:[<>=+\-*/%&|^!]=?|[+\-&|<>]{2}|<<=|>>=|<=>|~|->\*?|\(\)|\[\]|\"\"\s*{{identifier}})'
+  literal_operator: '[[:alpha:]_$]+'
+  double_suffix: '(?![xb]|\w+\d){{literal_operator}}'
+  integer_suffix: '(?![xb]|\w+\d){{literal_operator}}'
+  identifier: (?:\b|(?=\$))[[:alpha:]_$][[:alnum:]_$]*(?:\b|\$)
+  qualified: (?:::\s*)?(?:{{identifier}}(?:\s*:{0,2}\s*)?)+
+  attribute_item: '(?:(?:gnu|clang)::{{gnu_attribute_item}}|deprecated|noreturn|likely|unlikely|no_unique_address|fallthrough|nodiscard|maybe_unused|noreturn|unsequenced|reproducible)'
+  attribute_func: '(?:(?:gnu|clang)::{{gnu_attribute_func}}|deprecated|nodiscard|assume)'
