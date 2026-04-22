@@ -1,10 +1,10 @@
 %YAML 1.2
 ---
 # http://www.sublimetext.com/docs/3/syntax.html
-name: C++ Improved
+name: C++ Rewrite
 scope: source.c++
 version: 2
-extends: Packages/C-Family-Improved/C.sublime-syntax
+extends: Packages/C-Family-Rewrite/C.sublime-syntax
 
 contexts:
   function:

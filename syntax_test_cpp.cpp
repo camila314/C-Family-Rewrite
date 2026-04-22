@@ -1,4 +1,4 @@
-// SYNTAX TEST "Packages/C-Family-Improved/C++.sublime-syntax"
+// SYNTAX TEST "Packages/C-Family-Rewrite/C++.sublime-syntax"
 
     // Comment
 //  ^^^^^^^^^^ comment.line.double-slash.c 

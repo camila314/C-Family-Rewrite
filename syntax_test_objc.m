@@ -1,4 +1,4 @@
-// SYNTAX TEST "Packages/C-Family-Improved/ObjC.sublime-syntax"
+// SYNTAX TEST "Packages/C-Family-Rewrite/ObjC.sublime-syntax"
 
     // Comment
 //  ^^^^^^^^^^ comment.line.double-slash.c 

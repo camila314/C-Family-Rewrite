@@ -1,4 +1,4 @@
-# C-Family-Improved
+# C Family Rewrite
 C family (C, C++, Objective-C, Objective-C++) syntax rewrite for Sublime Text.
 
 This is a standalone version of the [Pull Request](https://github.com/sublimehq/Packages/pull/4147). 

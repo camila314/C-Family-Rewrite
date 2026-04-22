@@ -1,12 +1,12 @@
 %YAML 1.2
 ---
 # http://www.sublimetext.com/docs/3/syntax.html
-name: Objective-C++ Improved
+name: Objective-C++ Rewrite
 scope: source.objc++
 version: 2
 extends:
-  - Packages/C-Family-Improved/ObjC.sublime-syntax
-  - Packages/C-Family-Improved/C++.sublime-syntax
+  - Packages/C-Family-Rewrite/ObjC.sublime-syntax
+  - Packages/C-Family-Rewrite/C++.sublime-syntax
 
 first_line_match: |-
   (?xi:
