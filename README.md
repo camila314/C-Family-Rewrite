@@ -5,6 +5,10 @@ This is a standalone version of the [Pull Request](https://github.com/sublimehq/
 
 There are honestly too many changes to all point out here, but most importantly there is an improvement in lambdas, templates, concepts, objc messages, and any features beyond C20/C++20.
 
+# How to use
+
+This package has zero dependence on the default Sublime Text packages, so you do not need to worry about compatibility with those. The only step to using is to set the C Family Rewrite syntaxes as the default syntaxes to open the common file extensions. There may still be bugs as C++ is a very complicated language to write a syntax for and I would appreciate if any bugs you find are reported as an issue on the repository.
+
 ## Issues Fixed
 - [x] Fixes sublimehq/Packages#4104
 - [x] Fixes sublimehq/Packages#4058
